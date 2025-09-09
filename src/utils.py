@@ -3,8 +3,6 @@ from fastapi import HTTPException
 import duckdb
 import os
 from dotenv import load_dotenv
-current_path = os.path.dirname(os.path.abspath(__file__))
-parent_path = os.path.abspath(os.path.join(current_path, ".."))
 logger = setup_logging()
 load_dotenv()
 
@@ -35,6 +33,14 @@ def ducklake_attach_gcp(con):
     con.execute("SET s3_url_style = 'path'")
     logger.info("GCP configuration completed")
 
+def schema_creation(con):
+    logger.info("Creating database schemas")
+    con.execute("CREATE SCHEMA IF NOT EXISTS RAW_DATA")
+    con.execute("CREATE SCHEMA IF NOT EXISTS RAW")
+    con.execute("CREATE SCHEMA IF NOT EXISTS STAGED")
+    con.execute("CREATE SCHEMA IF NOT EXISTS CLEANED")
+    logger.info("Database schemas created successfully")
+
 DATASET_CONFIG = {
     1: {
         "table_name": "CLEANED.ASTRONAUTS"
@@ -64,8 +70,8 @@ def fetch_single_dataset(dataset_id, offset, limit):
         logger.info(f"Using dataset: {dataset['table_name']}")
 
         gcp_bucket = os.getenv('GCP_BUCKET_NAME')
-        data_path = f"gs://{gcp_bucket}/CATALOG_DATA_SNAPSHOTS"
-        catalog_path = os.path.join(parent_path, "catalog.ducklake")
+        data_path = f"gs://{gcp_bucket}/deployed_ducklake_data_snapshots"
+        catalog_path = f"gs://{gcp_bucket}/catalog.ducklake"
         
         con = duckdb_con_init()
         ducklake_init(con, data_path, catalog_path)
