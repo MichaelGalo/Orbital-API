@@ -1,23 +1,25 @@
-from src.logger import setup_logging
-from src.utils import duckdb_con_init, ducklake_init, ducklake_attach_gcp, schema_creation
 import os
+from src.logger import setup_logging
+from src.utils import duckdb_con_init, ducklake_init, connection_gcp_credentials
 from dotenv import load_dotenv
-current_path = os.path.dirname(os.path.abspath(__file__))
-parent_path = os.path.abspath(os.path.join(current_path, ".."))
+
 logger = setup_logging()
 load_dotenv()
 
 def setup():
     logger.info("Starting Orbital data lakehouse setup")
     gcp_bucket = os.getenv('GCP_BUCKET_NAME')
-    data_path = f"gs://{gcp_bucket}/deployed_ducklake_data_snapshots"
     catalog_path = f"gs://{gcp_bucket}/catalog.ducklake"
+    data_path = f"gs://{gcp_bucket}/CATALOG_DATA_SNAPSHOTS"
+
     con = duckdb_con_init()
     ducklake_init(con, data_path, catalog_path)
-    ducklake_attach_gcp(con)
-    schema_creation(con)
+    connection_gcp_credentials(con)
     con.close()
-    logger.info("Setup completed successfully")
+    logger.info("Remote DuckLake catalog connection established")
 
 if __name__ == "__main__":
     setup()
+
+
+#TODO: Store the pipeline catalog in GCS and simply access it from here.

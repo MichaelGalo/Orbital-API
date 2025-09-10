@@ -1,6 +1,8 @@
 from src.logger import setup_logging
 from fastapi import HTTPException
+from google.cloud import storage
 import duckdb
+import tempfile
 import os
 from dotenv import load_dotenv
 logger = setup_logging()
@@ -18,13 +20,25 @@ def duckdb_con_init():
     logger.info("Connected to in-memory DuckDB database")
     return con
 
+def get_local_ducklake_catalog():
+    client = storage.Client(os.getenv("GCP_PROJECT_NAME"))
+    bucket_name = os.getenv("GCP_BUCKET_NAME")
+    blob_name = "catalog.ducklake"
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+
+    tmp_catalog = tempfile.NamedTemporaryFile(delete=False, suffix=".ducklake")
+    blob.download_to_filename(tmp_catalog.name)
+    result = tmp_catalog.name
+    return result
+
 def ducklake_init(con, data_path, catalog_path):
     logger.info(f"Attaching DuckLake with data path: {data_path}")
     con.execute(f"ATTACH 'ducklake:{catalog_path}' AS my_ducklake (DATA_PATH '{data_path}')")
     con.execute("USE my_ducklake")
     logger.info("DuckLake attached and activated successfully")
 
-def ducklake_attach_gcp(con):
+def connection_gcp_credentials(con):
     logger.info("Configuring GCP settings")
     con.execute(f"SET s3_access_key_id = '{os.getenv('GCP_ACCESS_KEY')}'")
     con.execute(f"SET s3_secret_access_key = '{os.getenv('GCP_SECRET_KEY')}'")
@@ -32,14 +46,6 @@ def ducklake_attach_gcp(con):
     con.execute("SET s3_use_ssl = true")
     con.execute("SET s3_url_style = 'path'")
     logger.info("GCP configuration completed")
-
-def schema_creation(con):
-    logger.info("Creating database schemas")
-    con.execute("CREATE SCHEMA IF NOT EXISTS RAW_DATA")
-    con.execute("CREATE SCHEMA IF NOT EXISTS RAW")
-    con.execute("CREATE SCHEMA IF NOT EXISTS STAGED")
-    con.execute("CREATE SCHEMA IF NOT EXISTS CLEANED")
-    logger.info("Database schemas created successfully")
 
 DATASET_CONFIG = {
     1: {
@@ -70,12 +76,12 @@ def fetch_single_dataset(dataset_id, offset, limit):
         logger.info(f"Using dataset: {dataset['table_name']}")
 
         gcp_bucket = os.getenv('GCP_BUCKET_NAME')
-        data_path = f"gs://{gcp_bucket}/deployed_ducklake_data_snapshots"
-        catalog_path = f"gs://{gcp_bucket}/catalog.ducklake"
+        data_path = f"gs://{gcp_bucket}/CATALOG_DATA_SNAPSHOTS"
+        catalog_path = get_local_ducklake_catalog()
         
         con = duckdb_con_init()
+        connection_gcp_credentials(con)
         ducklake_init(con, data_path, catalog_path)
-        ducklake_attach_gcp(con)
 
         # Use a fully parameterized query
         query = f"""
