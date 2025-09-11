@@ -14,7 +14,7 @@ logger = setup_logging()
 
 origins = [
     "http://localhost:3000",
-    "https://example-production-domain.com"
+    "https://orbital-client-941477901286.us-central1.run.app"
 ]
 
 app.add_middleware(
